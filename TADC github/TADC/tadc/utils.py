@@ -1,4 +1,3 @@
-
 import numpy as np
 import scipy.sparse as sp
 import torch
@@ -14,7 +13,7 @@ def preprocess_graph(adj, I=True):
     else:
         adj_ = adj
     rowsum = adj_.sum(1).A1
-    rowsum[rowsum == 0] = 1e-10  # 避免度为0时除以0
+    rowsum[rowsum == 0] = 1e-10  # avoid division by zero when degree equals 0
     degree_mat_inv_sqrt = sp.diags(np.power(rowsum, -0.5))
     adj_normalized = adj_.dot(degree_mat_inv_sqrt).T.dot(degree_mat_inv_sqrt).tocsr()
     return adj_normalized
@@ -34,17 +33,17 @@ def set_seed(seed, cuda=True):
 def load_data(dataset='cora'):
 
     data = Dataset(root='data/', name=dataset)
-    print("数据集是否有自带train_mask？", hasattr(data, 'train_mask') and data.train_mask is not None)  # 新增打印
+    print("Does the dataset come with built-in train_mask?", hasattr(data, 'train_mask') and data.train_mask is not None)  # newly added print
     adj, features, labels = data.adj, data.features, data.labels
 
-    # 确保邻接矩阵无向 + 无权
+    # ensure adjacency matrix is undirected & unweighted
     adj = adj + adj.T
     adj[adj > 1] = 1
     adj.setdiag(0)
     adj = adj.astype("float32")
     adj.eliminate_zeros()
 
-    # 特征 -> 稠密张量
+    # features -> dense tensor
     features = torch.FloatTensor(features.toarray()).float()
     labels = torch.LongTensor(labels)
 
@@ -52,7 +51,7 @@ def load_data(dataset='cora'):
         features = features.cuda()
         labels = labels.cuda()
 
-    # 划分数据集
+    # split dataset
     if hasattr(data, 'train_mask') and data.train_mask is not None:
         split_train = np.where(data.train_mask)[0]
         split_val = np.where(data.val_mask)[0]
@@ -132,102 +131,5 @@ def ensure_sparse_csr(adj):
     elif sp.issparse(adj):
         return adj.tocsr()
     else:
-        # 如果是numpy数组
+        # if it is numpy array
         return sp.csr_matrix(adj)
-
-
-
-
-
-
-
-'''01版
-#utils.py
-import numpy as np
-import scipy.sparse as sp
-import torch
-from deeprobust.graph.data import Dataset
-from sklearn.model_selection import train_test_split
-
-def preprocess_graph(adj, I=True):
-    """Normalize adjacency matrix (Kipf & Welling)."""
-    if I:
-        adj_ = adj + sp.eye(adj.shape[0])
-    else:
-        adj_ = adj
-    rowsum = adj_.sum(1).A1
-    # 避免度为0时出现除以0
-    rowsum[rowsum == 0] = 1e-10
-    degree_mat_inv_sqrt = sp.diags(np.power(rowsum, -0.5))
-    adj_normalized = adj_.dot(degree_mat_inv_sqrt).T.dot(degree_mat_inv_sqrt).tocsr()
-    return adj_normalized
-
-def set_seed(seed, cuda):
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if cuda:
-        torch.cuda.manual_seed(seed)
-
-def load_data(name=None, dataset='cora', attack=False):
-    """
-    Load graph dataset using deeprobust Dataset API.
-    Returns:
-        labels : torch.LongTensor [N]
-        features : torch.FloatTensor [N, D]
-        split_train, split_val, split_unlabeled : np.ndarray
-        adj : scipy.sparse.csr_matrix
-    """
-    data = Dataset(root='data/', name=dataset)
-    adj, features, labels = data.adj, data.features, data.labels
-
-    # ensure adjacency symmetric + unweighted
-    adj = adj + adj.T
-    adj[adj > 1] = 1
-    adj.setdiag(0)
-    adj = adj.astype("float32")
-    adj.eliminate_zeros()
-
-    #features = torch.FloatTensor(features).float()
-    # 将稀疏矩阵转换为稠密矩阵后再转为张量
-    features = torch.FloatTensor(features.toarray()).float()
-    labels = torch.LongTensor(labels)
-
-    if torch.cuda.is_available():
-        features = features.cuda()
-        labels = labels.cuda()
-    # 如果 Dataset 提供了 mask，就直接用
-    if hasattr(data, 'train_mask') and data.train_mask is not None:
-        split_train = np.where(data.train_mask)[0]
-        split_val = np.where(data.val_mask)[0]
-        split_unlabeled = np.where(data.test_mask)[0]
-    else:
-        # 否则自己划分：10% train, 10% val, 80% test
-        idx = np.arange(len(labels))
-        idx_train, idx_temp, y_train, y_temp = train_test_split(
-            idx, labels.cpu(), train_size=0.1, stratify=labels.cpu(), random_state=42
-        )
-        idx_val, idx_test, _, _ = train_test_split(
-            idx_temp, y_temp, train_size=0.5, stratify=y_temp, random_state=42
-        )
-        split_train = idx_train
-        split_val = idx_val
-        split_unlabeled = idx_test
-
-    return labels, features, split_train, split_val, split_unlabeled, adj
-
-
-# tadc/utils.py
-
-
-def set_random_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-'''
-
-
