@@ -1,4 +1,3 @@
-
 import os
 import torch
 import numpy as np
@@ -11,10 +10,10 @@ from tadc.attacks import run_nettack_targets
 from tadc.model import TADCTrainer
 
 ######################################################
-# 工具函数
+# Utility Functions
 ######################################################
 def _to_scipy_adj(adj):
-    """确保返回 scipy.sparse.csr_matrix"""
+    """Ensure return scipy.sparse.csr_matrix"""
     if sp.issparse(adj):
         return adj.tocsr()
     if isinstance(adj, np.ndarray):
@@ -25,7 +24,7 @@ def _to_scipy_adj(adj):
 
 
 def save_results(results, out_dir):
-    """保存结果到JSON文件"""
+    """Save results to JSON file"""
     for dataset, data_res in results.items():
         result_file = os.path.join(out_dir, f"{dataset}_results.json")
         if os.path.exists(result_file):
@@ -38,20 +37,20 @@ def save_results(results, out_dir):
             data_res = existing_res
         with open(result_file, 'w', encoding='utf-8') as f:
             json.dump(data_res, f, indent=2, ensure_ascii=False)
-    print(f"结果已保存至 {out_dir}")
+    print(f"Results saved to {out_dir}")
 
 
 def _load_original_data(dataset, attacked_root='attacked_graphs'):
-    """加载原始数据（从 attacked_graphs/<dataset>/original_data.npz ）"""
+    """Load original data from attacked_graphs/<dataset>/original_data.npz"""
     data_path = os.path.join(attacked_root, dataset, 'original_data.npz')
     if not os.path.exists(data_path):
-        raise FileNotFoundError(f"原始数据文件缺失: {data_path}")
+        raise FileNotFoundError(f"Original data file missing: {data_path}")
 
     with np.load(data_path, allow_pickle=True) as f:
         A_orig = f['adj'].item() if isinstance(f['adj'], np.ndarray) else f['adj']
         features = f['features'].item() if isinstance(f['features'], np.ndarray) else f['features']
         labels_np = f['labels']
-        # 关键：split_unlabeled 应该是 idx_test（不要把 idx_val 赋给它）
+        # Key: split_unlabeled corresponds to idx_test (do not assign idx_val to it)
         split_train = f['idx_train']
         split_val = f['idx_val']
         split_unlabeled = f.get('idx_test', f.get('idx_unlabeled', f['idx_val']))
@@ -61,12 +60,12 @@ def _load_original_data(dataset, attacked_root='attacked_graphs'):
 
 
 def _load_perturbed_adj(dataset, perturb_ratio, attacked_root='attacked_graphs'):
-    """加载攻击后的邻接矩阵"""
+    """Load attacked adjacency matrix"""
     ratio_str = f"{perturb_ratio:.2f}"
     data_path = os.path.join(attacked_root, dataset, f'attacked_p{ratio_str}.npz')
 
     if not os.path.exists(data_path):
-        raise FileNotFoundError(f"攻击文件缺失: {data_path}")
+        raise FileNotFoundError(f"Attack file missing: {data_path}")
 
     with np.load(data_path, allow_pickle=True) as f:
         adj_attack = f['adj_attack'].item() if isinstance(f['adj_attack'], np.ndarray) else f['adj_attack']
@@ -75,7 +74,7 @@ def _load_perturbed_adj(dataset, perturb_ratio, attacked_root='attacked_graphs')
 
 
 ######################################################
-# 全局设置
+# Global Settings
 ######################################################
 
 DATASETS = ['citeseer']
@@ -104,16 +103,16 @@ os.makedirs(OUT_DIR, exist_ok=True)
 use_cuda = torch.cuda.is_available()
 model_device = torch.device("cuda" if use_cuda else "cpu")
 attack_device = torch.device("cpu")
-print(f"设备配置: 模型训练={model_device}, 攻击执行={attack_device}")
-print(f"RAM-GCN超参数: {RAMGCN_PARAMS}")
-print(f"攻击文件根目录: {ATTACKED_DIR}")
+print(f"Device configuration: model training={model_device}, attack execution={attack_device}")
+print(f"RAM-GCN hyperparameters: {RAMGCN_PARAMS}")
+print(f"Root directory for attack files: {ATTACKED_DIR}")
 
 def run_all():
     results = {}
     for dataset in DATASETS:
         results[dataset] = {}
-        print(f"\n=== 开始处理数据集: {dataset} ===")
-        # 1. 加载原始数据
+        print(f"\n=== Start processing dataset: {dataset} ===")
+        # 1. Load original data
         try:
             labels_np, features, split_train, split_val, split_unlabeled, A_orig = _load_original_data(
                 dataset=dataset, attacked_root=ATTACKED_DIR
@@ -127,7 +126,7 @@ def run_all():
             elif isinstance(features, torch.Tensor):
                 features = features.to(model_device)
             else:
-                raise TypeError(f"不支持的特征格式: {type(features)}")
+                raise TypeError(f"Unsupported feature format: {type(features)}")
 
             labels = torch.tensor(labels_np, dtype=torch.long, device=model_device)
 
@@ -135,31 +134,31 @@ def run_all():
             split_val = np.array(split_val, dtype=int)
             split_unlabeled = np.array(split_unlabeled, dtype=int)
 
-            print(f"原始数据加载成功: 节点数={A_orig.shape[0]}, 边数={int(A_orig.sum()//2)}, 特征维度={features.shape[1]}")
+            print(f"Original data loaded successfully: nodes={A_orig.shape[0]}, edges={int(A_orig.sum()//2)}, feature dimension={features.shape[1]}")
             print(f"split sizes -> train:{len(split_train)} val:{len(split_val)} test:{len(split_unlabeled)}")
             print("overlaps -> train∩val:", len(set(split_train) & set(split_val)),
                   "train∩test:", len(set(split_train) & set(split_unlabeled)),
                   "val∩test:", len(set(split_val) & set(split_unlabeled)))
         except Exception as e:
-            print(f" 数据集 {dataset} 加载失败: {str(e)}")
-            results[dataset]['error'] = f"数据加载失败: {str(e)}"
+            print(f" Failed to load dataset {dataset}: {str(e)}")
+            results[dataset]['error'] = f"Data loading failed: {str(e)}"
             save_results(results, OUT_DIR)
             continue
-        # 2. 扰动实验
+        # 2. Perturbation experiment
         attack_type = 'metattack'
         for ratio in perturb_ratios:
             ratio_key = str(ratio)
             results[dataset][ratio_key] = {}
-            print(f"\n-> 当前扰动比例: {ratio}（攻击类型: {attack_type}）")
+            print(f"\n-> Current perturbation ratio: {ratio} (attack type: {attack_type})")
 
             try:
                 start_time = time.time()
                 if ratio == 0.0:
                     perturbed_adj = A_orig
-                    print(f"  使用原始邻接矩阵（无扰动）")
+                    print(f"  Using original adjacency matrix (no perturbation)")
                 else:
                     perturbed_adj = _load_perturbed_adj(dataset, ratio, ATTACKED_DIR)
-                    print(f"  加载扰动邻接矩阵完成")
+                    print(f"  Perturbed adjacency matrix loaded")
 
                 trainer = TADCTrainer(**RAMGCN_PARAMS, device=str(model_device))
                 def_acc = trainer.fit_and_eval(
@@ -180,26 +179,26 @@ def run_all():
                 def_acc_val = float(def_acc_val)
                 def_acc_val = round(def_acc_val, 4)
                 results[dataset][ratio_key][attack_type] = def_acc_val
-                print(f" {attack_type} @ 扰动{ratio}: 防御准确率={def_acc_val:.4f}, 耗时={elapsed_time:.2f}秒")
+                print(f" {attack_type} @ perturbation {ratio}: defense accuracy={def_acc_val:.4f}, time cost={elapsed_time:.2f}s")
             except Exception as e:
                 error_msg = str(e)[:200]
-                print(f" 执行失败: {error_msg}")
-                results[dataset][ratio_key][attack_type] = f"失败: {error_msg}"
+                print(f" Execution failed: {error_msg}")
+                results[dataset][ratio_key][attack_type] = f"Failed: {error_msg}"
                 continue
 
 
-        # 3. 目标攻击（Nettack）
+        # 3. Targeted attack (Nettack)
         try:
-            print(f"\n-> 开始执行目标攻击: Nettack")
+            print(f"\n-> Start targeted attack: Nettack")
             degrees = np.array(A_orig.sum(axis=1)).flatten()
             candidate_nodes = np.where((degrees > 10) & (degrees > 0))[0]
             if len(candidate_nodes) == 0:
-                results[dataset]['nettack'] = "无符合条件的目标节点"
+                results[dataset]['nettack'] = "No eligible target nodes"
                 save_results(results, OUT_DIR)
                 continue
             target_nodes = np.random.choice(candidate_nodes, size=min(10, len(candidate_nodes)), replace=False)
             target_nodes = [int(node) for node in target_nodes]
-            print(f"选定目标节点: {target_nodes}")
+            print(f"Selected target nodes: {target_nodes}")
 
             nettack_results = {}
             for perturb_num in [0, 1, 2, 3, 4, 5]:
@@ -238,8 +237,8 @@ def run_all():
                         target_acc_list.append(target_acc_val)
                         nettack_results[perturb_key][f"node_{target_node}"] = target_acc_val
                     except Exception as e:
-                        print(f"     目标节点 {target_node} 失败: {str(e)[:200]}...")
-                        nettack_results[perturb_key][f"node_{target_node}"] = f"失败: {str(e)[:200]}"
+                        print(f"     Target node {target_node} failed: {str(e)[:200]}...")
+                        nettack_results[perturb_key][f"node_{target_node}"] = f"Failed: {str(e)[:200]}"
                         continue
 
                 valid_accs = [acc for acc in target_acc_list if isinstance(acc, (float, int))]
@@ -248,16 +247,16 @@ def run_all():
 
             results[dataset]['nettack'] = nettack_results
         except Exception as e:
-            print(f" 目标攻击执行失败: {str(e)}")
-            results[dataset]['nettack'] = f"执行失败: {str(e)}"
+            print(f" Targeted attack execution failed: {str(e)}")
+            results[dataset]['nettack'] = f"Execution failed: {str(e)}"
             save_results(results, OUT_DIR)
             continue
 
-        # 保存每个数据集的中间结果
+        # Save intermediate results for each dataset
         save_results(results, OUT_DIR)
-        print(f"=== 数据集 {dataset} 处理完成 ===")
+        print(f"=== Dataset {dataset} processing finished ===")
 
-    print("\n 所有数据集实验处理完成！")
+    print("\n All dataset experiments completed!")
     return results
 if __name__ == "__main__":
     set_seed(42, use_cuda)
