@@ -1,4 +1,3 @@
-
 import os
 import numpy as np
 import scipy.sparse as sp
@@ -11,9 +10,9 @@ def load_original_data(dataset_name, attacked_root='attacked_graphs'):
     data_path = os.path.join(attacked_root, dataset_name, 'original_data.npz')
 
     if not os.path.exists(data_path):
-        raise FileNotFoundError(f"原始数据文件不存在: {data_path}")
+        raise FileNotFoundError(f"The original data file does not exist: {data_path}")
 
-    print(f"加载原始数据: {data_path}")
+    print(f"Loading original data: {data_path}")
 
     with np.load(data_path, allow_pickle=True) as data:
         # 加载数据
@@ -40,8 +39,8 @@ def load_original_data(dataset_name, attacked_root='attacked_graphs'):
         if isinstance(labels, torch.Tensor):
             labels = labels.cpu().numpy()
 
-        print(f"数据形状: adj={adj.shape}, features={features.shape}, labels={labels.shape}")
-        print(f"训练集大小: {len(idx_train)}, 验证集大小: {len(idx_val)}, 测试集大小: {len(idx_test)}")
+        print(f"Data shape: adj={adj.shape}, features={features.shape}, labels={labels.shape}")
+        print(f"Train set size: {len(idx_train)}, Val set size: {len(idx_val)}, Test set size: {len(idx_test)}")
 
         return labels, features, idx_train, idx_val, idx_test, adj
 
@@ -55,9 +54,9 @@ def load_attacked_data(dataset_name, perturbation_rate, attacked_root='attacked_
     attacked_file = os.path.join(attacked_root, dataset_name, f'attacked_p{perturbation_rate:.2f}.npz')
 
     if not os.path.exists(attacked_file):
-        raise FileNotFoundError(f"攻击数据文件不存在: {attacked_file}")
+        raise FileNotFoundError(f"Attacked data file does not exist: {attacked_file}")
 
-    print(f"加载攻击数据: {attacked_file}")
+    print(f"Loading attacked data: {attacked_file}")
 
     with np.load(attacked_file, allow_pickle=True) as data:
         adj_attacked = data['adj_attack'].item() if isinstance(data['adj_attack'], np.ndarray) else data['adj_attack']
@@ -68,7 +67,7 @@ def load_attacked_data(dataset_name, perturbation_rate, attacked_root='attacked_
         else:
             adj_attacked = adj_attacked.tocsr()
 
-        print(f"攻击后邻接矩阵形状: {adj_attacked.shape}, 非零元素: {adj_attacked.nnz}")
+        print(f"Shape of attacked adjacency matrix: {adj_attacked.shape}, Non-zero elements: {adj_attacked.nnz}")
 
         return labels, features, idx_train, idx_val, idx_test, adj_attacked
 
@@ -124,7 +123,7 @@ def load_attack_summary(dataset_name, attacked_root='attacked_graphs'):
             summary = summary.item()
         return summary
     except Exception as e:
-        print(f"加载攻击摘要失败: {e}")
+        print(f"Failed to load attack summary: {e}")
         return None
 
 
@@ -159,34 +158,34 @@ def compare_adjacency_matrices(adj_original, adj_attacked):
 
 if __name__ == "__main__":
     # 测试数据加载功能
-    print("=== 测试扰动数据加载功能 ===")
+    print("=== Test Perturbed Data Loading Function ===")
 
     # 获取可用数据集
     datasets = get_available_datasets()
-    print(f"可用数据集: {datasets}")
+    print(f"Available datasets: {datasets}")
 
     for dataset in datasets[:1]:  # 只测试第一个数据集
-        print(f"\n--- 测试数据集: {dataset} ---")
+        print(f"\n--- Testing dataset: {dataset} ---")
 
         # 获取可用扰动率
         rates = get_available_perturbation_rates(dataset)
-        print(f"可用扰动率: {rates}")
+        print(f"Available perturbation rates: {rates}")
 
         # 加载原始数据
         try:
             labels, features, idx_train, idx_val, idx_test, adj_orig = load_original_data(dataset)
-            print("原始数据加载成功")
+            print("Original data loaded successfully")
 
             # 测试一个扰动率
             if rates:
                 rate = rates[0]
                 labels_att, features_att, idx_train_att, idx_val_att, idx_test_att, adj_att = load_attacked_data(
                     dataset, rate)
-                print(f"扰动数据 (p={rate}) 加载成功")
+                print(f"Perturbed data (p={rate}) loaded successfully")
 
                 # 比较邻接矩阵
                 comparison = compare_adjacency_matrices(adj_orig, adj_att)
-                print(f"邻接矩阵比较结果: {comparison}")
+                print(f"Adjacency matrix comparison result: {comparison}")
 
         except Exception as e:
-            print(f"测试失败: {e}")
+            print(f"Test failed: {e}")
