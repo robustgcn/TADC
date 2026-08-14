@@ -62,7 +62,7 @@ def load_data(dataset='cora'):
             idx, labels.cpu(), train_size=0.1, stratify=labels.cpu(), random_state=42
         )
         idx_val, idx_test, _, _ = train_test_split(
-            idx_temp, y_temp, train_size=0.5, stratify=y_temp, random_state=42
+            idx_temp, y_temp, train_size=1/9, stratify=y_temp, random_state=42
         )
         split_train = idx_train
         split_val = idx_val
